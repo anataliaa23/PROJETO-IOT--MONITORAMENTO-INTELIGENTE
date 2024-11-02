@@ -1,0 +1,147 @@
+
+#include <LiquidCrystal_I2C.h>// tambem voltado pra o display LCD, pra facilitar a exibicao de informaçoes
+#include <DHT.h>// biblioteca voltada pra a utilização  de sensores de temp/umd como DHT11 e DHT22
+#include <SoftwareSerial.h>// biblioteca usada para comunicacao atraves de portas seriais, pra nesse caso, mod Bluetooh
+
+#define sensorDeTempUm 7  // Pino de DHT11
+#define dhtTipo DHT11     
+#define sensordePir 13  // Pino do sensor PIR
+SoftwareSerial bluetooh(8, 9); // Configuração do Bluetooth
+DHT dht(sensorDeTempUm, dhtTipo); // Inicialização do sensor DHT
+LiquidCrystal_I2C displayLcd(0x27, 16, 2); // Display tipo
+
+// Limite de temperatura
+const float tempAlta = 30.0; // temperatura alta
+const float tempBaixa = 25.0;  // temperatura baixa
+
+// Limite umidade
+const float umidAlta = 80.0; // umidade alta
+const float umidBaixa = 40.0;  // umidade baixa
+
+// leds de temperatura( fileira G do proatboard)
+const int ledVermelhaT = 6;   // LED para alta
+const int ledVerdeT = 5; // LED para padrão 
+const int ledAzulT = 4; // LED para baixo 
+
+// leds de umidade(fileira C do proatboard)
+const int ledVermelhaU = 12;   // LED para alta umidade 
+const int ledVerdeU = 11; // LED para padrão umidade 
+const int ledAzulU = 10; // LED para baixa umidade 
+
+
+void setup() {
+  displayLcd.init(); // Inicializa o LCD
+  displayLcd.backlight(); // Liga a luz de fundo do LCD
+  dht.begin(); // Inicializa o sensor DHT
+
+  pinMode(ledVermelhaT, OUTPUT); // Configura o LED vermelho como saída
+  pinMode(ledAzulT, OUTPUT); // Configura o LED azul como saída
+  pinMode(ledVerdeT, OUTPUT); // Configura o LED verde como saída
+
+  pinMode(ledVermelhaU, OUTPUT); // Configura o LED vermelho para umidade como saída
+  pinMode(ledAzulU, OUTPUT); // Configura o LED azul para umidade como saída
+  pinMode(ledVerdeU, OUTPUT); // Configura o LED verde para umidade como saída
+  pinMode(sensordePir, INPUT); // Configura o pino do PIR como entrada
+
+  Serial.begin(9600); // Inicializa a comunicação serial
+  bluetooh.begin(9600); // Inicializa a comunicação Bluetooth
+   delay(2000); 
+  
+  displayLcd.setCursor(0, 0); // Define a posição do cursor no LCD
+  displayLcd.print("Iniciando ..."); // Mensagem de inicialização
+  delay(2000); // Aguarda 2 segundos
+}
+
+void loop() {
+  
+  int movimento = digitalRead(sensordePir); // Lê o estado do sensor PIR
+
+  if (movimento== HIGH) {
+    displayLcd.clear(); // Limpa o LCD
+    displayLcd.setCursor(0, 0); // Define a posição do cursor no LCD
+    displayLcd.print("Movimento Detectado"); // Mensagem de movimento detectado
+    delay(1000); 
+
+    // Medir temperatura e umidade
+    float temperatura = dht.readTemperature(); // Lê a temperatura
+    float umidade = dht.readHumidity(); // Lê a umidade
+
+    if (isnan(temperatura) || isnan(umidade)) {
+      displayLcd.clear(); // Limpa o LCD
+      displayLcd.setCursor(0, 0); // Define a posição do cursor no LCD
+      displayLcd.print("Erro na leitura"); // Mensagem de erro
+      delay(2000); // Aguarda 2 segundos
+      return; // Retorna para o início do loop
+    }
+
+    displayLcd.clear(); // Limpa o LCD
+    displayLcd.setCursor(0, 0); // Define a posição do cursor no LCD
+    displayLcd.print("Temp: "); // Mensagem de temperatura
+    displayLcd.print(temperatura); // Mostra a temperatura
+    displayLcd.print(" C");
+
+    displayLcd.setCursor(0, 1); // Define a posição do cursor no LCD
+    displayLcd.print("Umid: "); // Mensagem de umidade
+    displayLcd.print(umidade); // Mostra a umidade
+    displayLcd.print(" %");
+
+    
+    // Enviar dados via Bluetooth
+      String dados = "Temp: " + String(temperatura) + " C, Umid: " + String(umidade) + " %"; // Formatação da string
+
+     bluetooh.println(dados); // Envia os dados via Bluetooth
+     Serial.println(dados); // Mostra os dados no Monitor Serial
+
+    // LED de temperatura
+    if (temperatura >= tempAlta) {// TEMPERATURA ALTA
+      digitalWrite(ledVermelhaT, HIGH); // Acende o LED vermelho
+      digitalWrite(ledAzulT, LOW); // Apaga o LED azul
+      digitalWrite(ledVerdeT, LOW); // Apaga o LED verde
+
+    } else if (temperatura > tempBaixa && temperatura < tempAlta) {//TEMPERATURA IDEAL
+      digitalWrite(ledVermelhaT, LOW); // Apaga o LED vermelho
+      digitalWrite(ledAzulT, LOW); // Apaga o LED azul
+      digitalWrite(ledVerdeT, HIGH); // Acende o LED verde
+
+    } else {// TEMPERATURA BAIXA
+      digitalWrite(ledVermelhaT, LOW); // Apaga o LED vermelho
+      digitalWrite(ledAzulT, HIGH); // Acende o LED azul
+      digitalWrite(ledVerdeT, LOW ); // Apaga o LED verde
+
+
+    }
+
+    // Controle do LED de umidade
+    if (umidade >= umidAlta) { // ALERTA DE UMIDADE ALTA
+      digitalWrite(ledVerdeU, LOW); // Apaga o LED verde para umidade
+      digitalWrite(ledVermelhaU, HIGH); // Acende o LED vermelho para umidade
+      digitalWrite(ledAzulU, LOW); // Apaga o LED azul para umidade
+
+    } else if (umidade > umidBaixa && umidade < umidAlta) { // UMIDADE IDEAL
+      digitalWrite(ledVerdeU, HIGH); // Acende a led verde
+      digitalWrite(ledVermelhaU, LOW); // Apaga o LED vermelho para umidade
+      digitalWrite(ledAzulU, LOW); // Apaga o LED azul para umidade
+
+    } else { // UMIDADE BAIXA
+      digitalWrite(ledVerdeU, LOW); // Apaga o LED verde para umidade
+      digitalWrite(ledAzulU, HIGH); // Acende o LED azul para umidade
+      digitalWrite(ledVermelhaU, LOW); // Apaga o LED vermelho para umidade
+    }
+     delay(3000); 
+  } else {// Sem movimento
+      displayLcd.clear(); 
+      displayLcd.setCursor(0, 0); 
+      displayLcd.print("Sem Movimento"); 
+      Serial.println("Sem movimento"); 
+    digitalWrite(ledVermelhaT, LOW); // Apaga o LED vermelho temp
+    digitalWrite(ledAzulT, LOW); // Apaga o LED azul temp
+    digitalWrite(ledVerdeT, LOW); // Apaga o LED verde temp
+    digitalWrite(ledVermelhaU, LOW); // Apaga o LED vermelho para umidade
+    digitalWrite(ledAzulU, LOW); // Apaga o LED azul para umidade
+    digitalWrite(ledVerdeU, LOW); // Apaga o LED verde para umidade
+  }
+
+
+
+  delay(500); 
+}
